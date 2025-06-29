@@ -9,23 +9,27 @@ export default function useSocket(roomId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState("");
   const [isConnected, setIsConnected] = useState(false);
-  const [hasJoined, setHasJoined] = useState(false);
-
+  const [isJoined, setIsJoined] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
-  const pendingJoinRef = useRef(false);
+  const hasTriedCreateRef = useRef(false);
 
   useEffect(() => {
-    if (!roomId) return;
+    if (socketRef.current) {
+      socketRef.current.close();
+      socketRef.current = null;
+    }
 
-    const socket = new WebSocket("wss://real-time-chat-app-mev3.onrender.com");
+    const socket = new WebSocket("wss://your-backend-url.onrender.com"); // change this to your deployed backend ws URL
     socketRef.current = socket;
-    setHasJoined(false);
-    setIsConnected(false);
 
     socket.onopen = () => {
       setIsConnected(true);
-      pendingJoinRef.current = true;
-      socket.send(JSON.stringify({ type: "join", payload: { roomId } }));
+      setIsJoined(false);
+      hasTriedCreateRef.current = false;
+
+      if (roomId) {
+        socket.send(JSON.stringify({ type: "join", payload: { roomId } }));
+      }
     };
 
     socket.onmessage = (event) => {
@@ -34,34 +38,35 @@ export default function useSocket(roomId: string) {
       if (data.type === "chat") {
         setMessages((prev) => [
           ...prev,
-          {
-            message: data.payload.message,
-            sender: data.payload.sender,
-          },
+          { message: data.payload.message, sender: data.payload.sender },
         ]);
       }
 
       if (data.type === "error") {
         if (
           data.payload.message === "Invalid room code." &&
-          pendingJoinRef.current
+          !hasTriedCreateRef.current
         ) {
-          pendingJoinRef.current = false;
+          hasTriedCreateRef.current = true;
           socket.send(JSON.stringify({ type: "create", payload: { roomId } }));
         } else {
           setError(data.payload.message);
         }
       }
 
-      if (data.type === "room-created" || data.type === "Success") {
-        setHasJoined(true);
+      if (
+        data.type === "room-created" ||
+        data.type === "Success" ||
+        data.type === "joined"
+      ) {
+        setIsJoined(true);
         setError("");
       }
     };
 
     socket.onclose = () => {
       setIsConnected(false);
-      setHasJoined(false);
+      setIsJoined(false);
     };
 
     socket.onerror = () => {
@@ -69,18 +74,20 @@ export default function useSocket(roomId: string) {
     };
 
     return () => {
-      socket.close();
-      socketRef.current = null;
+      if (socketRef.current) {
+        socketRef.current.close();
+        socketRef.current = null;
+      }
     };
   }, [roomId]);
 
   const sendMessage = (msg: string) => {
-    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-      setError("Not connected to server.");
+    if (!isConnected || !socketRef.current) {
+      setError("Not connected to server");
       return;
     }
 
-    if (!hasJoined) {
+    if (!isJoined) {
       setError("Still joining the room. Try again in a second.");
       return;
     }
@@ -90,7 +97,9 @@ export default function useSocket(roomId: string) {
     );
   };
 
-  const clearError = () => setError("");
+  const clearError = () => {
+    setError("");
+  };
 
   return {
     messages,
