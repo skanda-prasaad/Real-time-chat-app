@@ -12,26 +12,20 @@ export default function useSocket(roomId: string) {
   const [hasJoined, setHasJoined] = useState(false);
 
   const socketRef = useRef<WebSocket | null>(null);
-  const hasTriedCreateRef = useRef(false);
+  const pendingJoinRef = useRef(false);
 
   useEffect(() => {
-    if (socketRef.current) {
-      socketRef.current.close();
-      socketRef.current = null;
-    }
+    if (!roomId) return;
 
     const socket = new WebSocket("wss://real-time-chat-app-mev3.onrender.com");
-
     socketRef.current = socket;
+    setHasJoined(false);
+    setIsConnected(false);
 
     socket.onopen = () => {
       setIsConnected(true);
-      setHasJoined(false);
-      hasTriedCreateRef.current = false;
-
-      if (roomId) {
-        socket.send(JSON.stringify({ type: "join", payload: { roomId } }));
-      }
+      pendingJoinRef.current = true;
+      socket.send(JSON.stringify({ type: "join", payload: { roomId } }));
     };
 
     socket.onmessage = (event) => {
@@ -40,17 +34,19 @@ export default function useSocket(roomId: string) {
       if (data.type === "chat") {
         setMessages((prev) => [
           ...prev,
-          { message: data.payload.message, sender: data.payload.sender },
+          {
+            message: data.payload.message,
+            sender: data.payload.sender,
+          },
         ]);
-        setHasJoined(true); // Defensive — mark joined if chat is received
       }
 
       if (data.type === "error") {
         if (
           data.payload.message === "Invalid room code." &&
-          !hasTriedCreateRef.current
+          pendingJoinRef.current
         ) {
-          hasTriedCreateRef.current = true;
+          pendingJoinRef.current = false;
           socket.send(JSON.stringify({ type: "create", payload: { roomId } }));
         } else {
           setError(data.payload.message);
@@ -73,21 +69,19 @@ export default function useSocket(roomId: string) {
     };
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.close();
-        socketRef.current = null;
-      }
+      socket.close();
+      socketRef.current = null;
     };
   }, [roomId]);
 
   const sendMessage = (msg: string) => {
-    if (!isConnected || !socketRef.current) {
-      setError("Not connected to server");
+    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+      setError("Not connected to server.");
       return;
     }
 
     if (!hasJoined) {
-      setError("Not joined to room yet");
+      setError("Still joining the room. Try again in a second.");
       return;
     }
 
@@ -96,9 +90,7 @@ export default function useSocket(roomId: string) {
     );
   };
 
-  const clearError = () => {
-    setError("");
-  };
+  const clearError = () => setError("");
 
   return {
     messages,
