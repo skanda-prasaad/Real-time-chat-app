@@ -20,7 +20,7 @@ export default function useSocket(roomId: string) {
       socketRef.current = null;
     }
 
-    const socket = new WebSocket("wss://replace-me.onrender.com");
+    const socket = new WebSocket("wss://real-time-chat-app-mev3.onrender.com");
 
     socketRef.current = socket;
 
