@@ -20,7 +20,8 @@ export default function useSocket(roomId: string) {
       socketRef.current = null;
     }
 
-    const socket = new WebSocket("ws://localhost:8008");
+    const socket = new WebSocket("wss://replace-me.onrender.com");
+
     socketRef.current = socket;
 
     socket.onopen = () => {
