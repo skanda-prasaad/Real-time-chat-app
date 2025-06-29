@@ -2,9 +2,12 @@
   "name": "real-time-chat-app",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "type": "commonjs",
   "scripts": {
-    "dev": "tsc -build && node ./dist/index.js"
+    "dev": "tsc -b && node ./dist/index.js",
+    "build": "tsc",
+    "start": "node ./dist/index.js"
   },
   "repository": {
     "type": "git",
@@ -13,7 +16,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/skanda-prasaad/Real-time-chat-app/issues"
   },
