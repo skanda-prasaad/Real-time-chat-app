@@ -1,4 +1,5 @@
 import { WebSocketServer, WebSocket } from "ws";
+
 const wss = new WebSocketServer({ port: 8008 });
 
 interface User {
@@ -7,142 +8,114 @@ interface User {
   userId: string;
 }
 
-function generateRoomCode(length = 6) {
+let users: User[] = [];
+
+function generateRoomCode(length = 6): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let code = "";
-  for (let i = 0; i < length; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
+  return Array.from(
+    { length },
+    () => chars[Math.floor(Math.random() * chars.length)]
+  ).join("");
 }
 
-function generateUserId() {
+function generateUserId(): string {
   return Math.random().toString(36).substring(2, 15);
 }
 
-// Store all connected users
-let users: User[] = [];
-
-// Get users in a specific room
 function getUsersInRoom(roomId: string): User[] {
-  return users.filter(user => user.room === roomId);
+  return users.filter((user) => user.room === roomId);
 }
 
-wss.on("connection", function (socket) {
-  console.log("New connection established");
+function sendToSocket(socket: WebSocket, type: string, payload: any) {
+  socket.send(JSON.stringify({ type, payload }));
+}
 
-  socket.on("message", (message) => {
-    const parsedMessage = JSON.parse(message as unknown as string);
-    console.log("Received message:", parsedMessage.type);
-
-    if (parsedMessage.type === "create") {
-      const roomId = parsedMessage.payload?.roomId || generateRoomCode();
-      const userId = generateUserId();
-
-      // Check if room already exists and has users
-      const existingUsers = getUsersInRoom(roomId);
-      if (existingUsers.length >= 2) {
-        socket.send(
-          JSON.stringify({
-            type: "error",
-            payload: { message: "Room full. Only 2 users allowed." },
-          })
-        );
-        return;
-      }
-
-      // Add user to room
-      const user = { socket, room: roomId, userId };
-      users.push(user);
-
-      console.log(`Room created/joined: ${roomId}, users: ${getUsersInRoom(roomId).length}`);
-      socket.send(
-        JSON.stringify({
-          type: "room-created",
-          payload: { roomId },
-        })
-      );
+wss.on("connection", (socket) => {
+  socket.on("message", (data) => {
+    let parsedMessage;
+    try {
+      parsedMessage = JSON.parse(data.toString());
+    } catch {
+      return;
     }
 
-    if (parsedMessage.type === "join") {
-      const roomId = parsedMessage.payload.roomId;
-      const usersInRoom = getUsersInRoom(roomId);
+    const { type, payload } = parsedMessage;
 
-      console.log(`Attempting to join room: ${roomId}, users in room: ${usersInRoom.length}`);
+    switch (type) {
+      case "create": {
+        const roomId = payload?.roomId || generateRoomCode();
+        const userId = generateUserId();
+        const existingUsers = getUsersInRoom(roomId);
 
-      // Check if room exists (has at least one user)
-      if (usersInRoom.length === 0) {
-        console.log(`Room ${roomId} does not exist`);
-        socket.send(
-          JSON.stringify({
-            type: "error",
-            payload: { message: "Invalid room code." },
-          })
-        );
-        return;
+        if (existingUsers.length >= 2) {
+          sendToSocket(socket, "error", {
+            message: "Room full. Only 2 users allowed.",
+          });
+          return;
+        }
+
+        users.push({ socket, room: roomId, userId });
+        sendToSocket(socket, "room-created", { roomId });
+        break;
       }
 
-      // Check room capacity (max 2 users)
-      if (usersInRoom.length >= 2) {
-        console.log(`Room ${roomId} is full`);
-        socket.send(
-          JSON.stringify({
-            type: "error",
-            payload: { message: "Room full. Only 2 users allowed." },
-          })
-        );
-        return;
+      case "join": {
+        const roomId = payload?.roomId;
+        if (!roomId) {
+          sendToSocket(socket, "error", {
+            message: "Room ID required to join.",
+          });
+          return;
+        }
+
+        const usersInRoom = getUsersInRoom(roomId);
+
+        if (usersInRoom.length === 0) {
+          sendToSocket(socket, "error", { message: "Invalid room code." });
+          return;
+        }
+
+        if (usersInRoom.length >= 2) {
+          sendToSocket(socket, "error", {
+            message: "Room full. Only 2 users allowed.",
+          });
+          return;
+        }
+
+        const userId = generateUserId();
+        users.push({ socket, room: roomId, userId });
+        sendToSocket(socket, "joined", {
+          message: "Joined room successfully",
+          roomId,
+        });
+        break;
       }
 
-      // Add user to room
-      const userId = generateUserId();
-      const user = { socket, room: roomId, userId };
-      users.push(user);
+      case "chat": {
+        const currentUser = users.find((u) => u.socket === socket);
+        if (!currentUser) return;
 
-      console.log(`User joined room: ${roomId}, total users: ${getUsersInRoom(roomId).length}`);
+        const usersInRoom = getUsersInRoom(currentUser.room);
+        usersInRoom.forEach((user) => {
+          const isSelf = user.socket === socket;
+          sendToSocket(user.socket, "chat", {
+            message: payload?.message,
+            sender: isSelf ? "me" : "other",
+          });
+        });
+        break;
+      }
 
-      socket.send(
-        JSON.stringify({
-          type: "Success",
-          payload: { message: "Joined room successfully" },
-        })
-      );
-    }
-
-    if (parsedMessage.type === "chat") {
-      const currentUser = users.find((x) => x.socket === socket);
-      if (!currentUser) return;
-
-      const usersInRoom = getUsersInRoom(currentUser.room);
-      console.log(`Chat message in room: ${currentUser.room}, users: ${usersInRoom.length}`);
-
-      // Send message to all users in the room
-      usersInRoom.forEach((user) => {
-        user.socket.send(
-          JSON.stringify({
-            type: "chat",
-            payload: {
-              message: parsedMessage.payload.message,
-              sender: user.socket === socket ? "me" : "other"
-            },
-          })
-        );
-      });
+      default:
+        sendToSocket(socket, "error", { message: "Unknown message type." });
+        break;
     }
   });
 
   socket.on("close", () => {
     const userIndex = users.findIndex((user) => user.socket === socket);
-    if (userIndex !== -1) {
-      const user = users[userIndex];
-      console.log(`User disconnected from room: ${user.room}`);
-      users.splice(userIndex, 1);
-      console.log(`Remaining users in room ${user.room}: ${getUsersInRoom(user.room).length}`);
-    }
-    console.log("A user disconnected. Cleaned up.");
+    if (userIndex !== -1) users.splice(userIndex, 1);
   });
 
-  socket.on("error", (error) => {
-    console.log("Socket error:", error);
-  });
+  socket.on("error", () => {});
 });

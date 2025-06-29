@@ -8,8 +8,9 @@ export default function MessageInput({ onSend }: Props) {
   const [newMsg, setNewMsg] = useState("");
 
   const handleSend = () => {
-    if (!newMsg.trim()) return;
-    onSend(newMsg.trim());
+    const trimmed = newMsg.trim();
+    if (!trimmed) return;
+    onSend(trimmed);
     setNewMsg("");
   };
 
@@ -20,7 +21,9 @@ export default function MessageInput({ onSend }: Props) {
         placeholder="Type a message..."
         value={newMsg}
         onChange={(e) => setNewMsg(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && handleSend()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") handleSend();
+        }}
       />
       <button
         className="bg-green-500 hover:bg-green-600 text-white p-3 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex-shrink-0"

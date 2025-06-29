@@ -9,12 +9,12 @@ export default function useSocket(roomId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState("");
   const [isConnected, setIsConnected] = useState(false);
+  const [hasJoined, setHasJoined] = useState(false);
+
   const socketRef = useRef<WebSocket | null>(null);
-  const hasJoinedRef = useRef(false);
   const hasTriedCreateRef = useRef(false);
 
   useEffect(() => {
-    // Clean up previous connection
     if (socketRef.current) {
       socketRef.current.close();
       socketRef.current = null;
@@ -24,36 +24,31 @@ export default function useSocket(roomId: string) {
     socketRef.current = socket;
 
     socket.onopen = () => {
-      console.log("WebSocket connected");
       setIsConnected(true);
-      hasJoinedRef.current = false;
+      setHasJoined(false);
       hasTriedCreateRef.current = false;
 
       if (roomId) {
-        // Try to join the room first
-        console.log("Attempting to join room:", roomId);
         socket.send(JSON.stringify({ type: "join", payload: { roomId } }));
       }
     };
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      console.log("Received:", data.type, data);
 
       if (data.type === "chat") {
-        console.log("Adding message:", data.payload);
         setMessages((prev) => [
           ...prev,
           { message: data.payload.message, sender: data.payload.sender },
         ]);
+        setHasJoined(true); // Defensive — mark joined if chat is received
       }
 
       if (data.type === "error") {
-        console.log("Error:", data.payload.message);
-
-        // If room doesn't exist and we haven't tried creating it yet, create it
-        if (data.payload.message === "Invalid room code." && !hasTriedCreateRef.current) {
-          console.log("Room doesn't exist, creating it instead");
+        if (
+          data.payload.message === "Invalid room code." &&
+          !hasTriedCreateRef.current
+        ) {
           hasTriedCreateRef.current = true;
           socket.send(JSON.stringify({ type: "create", payload: { roomId } }));
         } else {
@@ -61,32 +56,22 @@ export default function useSocket(roomId: string) {
         }
       }
 
-      if (data.type === "room-created") {
-        console.log("Room created:", data.payload.roomId);
-        hasJoinedRef.current = true;
-        setError("");
-      }
-
-      if (data.type === "Success") {
-        console.log("Successfully joined room");
-        hasJoinedRef.current = true;
+      if (data.type === "room-created" || data.type === "Success") {
+        setHasJoined(true);
         setError("");
       }
     };
 
     socket.onclose = () => {
-      console.log("WebSocket disconnected");
       setIsConnected(false);
-      hasJoinedRef.current = false;
+      setHasJoined(false);
     };
 
-    socket.onerror = (error) => {
-      console.log("WebSocket error:", error);
+    socket.onerror = () => {
       setError("Connection error. Please try again.");
     };
 
     return () => {
-      console.log("Cleaning up WebSocket connection");
       if (socketRef.current) {
         socketRef.current.close();
         socketRef.current = null;
@@ -100,12 +85,11 @@ export default function useSocket(roomId: string) {
       return;
     }
 
-    if (!hasJoinedRef.current) {
+    if (!hasJoined) {
       setError("Not joined to room yet");
       return;
     }
 
-    console.log("Sending message:", msg);
     socketRef.current.send(
       JSON.stringify({ type: "chat", payload: { message: msg } })
     );
@@ -120,6 +104,6 @@ export default function useSocket(roomId: string) {
     sendMessage,
     error,
     clearError,
-    isConnected
+    isConnected,
   };
 }

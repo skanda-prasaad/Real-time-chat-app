@@ -5,55 +5,46 @@ import Toast from "../components/Toast";
 export default function Home() {
   const [roomId, setRoomId] = useState("");
   const [isCreating, setIsCreating] = useState(false);
-  const [toast, setToast] = useState<{
-    message: string;
-    type: "error" | "success" | "warning";
-    isVisible: boolean;
-  }>({
+  const [toast, setToast] = useState({
     message: "",
-    type: "error",
+    type: "error" as "error" | "success" | "warning",
     isVisible: false,
   });
+
   const navigate = useNavigate();
 
-  const showToast = (message: string, type: "error" | "success" | "warning" = "error") => {
+  const showToast = (
+    message: string,
+    type: "error" | "success" | "warning" = "error"
+  ) => {
     setToast({ message, type, isVisible: true });
   };
 
   const hideToast = () => {
-    setToast(prev => ({ ...prev, isVisible: false }));
+    setToast((prev) => ({ ...prev, isVisible: false }));
   };
 
-  function joinRoom() {
-    if (roomId.length !== 6) {
+  const joinRoom = () => {
+    if (roomId.trim().length !== 6) {
       showToast("Invalid room code.");
       return;
     }
-    // Navigate to join the room - it will show error if room doesn't exist
-    navigate(`/room/${roomId}`);
-  }
+    navigate(`/room/${roomId.trim()}`);
+  };
 
-  function createRoom() {
+  const createRoom = () => {
     if (isCreating) return;
-
     setIsCreating(true);
 
-    // Generate a random room code
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     let code = "";
     for (let i = 0; i < 6; i++) {
       code += chars[Math.floor(Math.random() * chars.length)];
     }
 
-    console.log("Creating room with code:", code);
-
-    // Navigate directly to the room - the ChatRoom component will handle room creation
-    setTimeout(() => {
-      setIsCreating(false);
-    }, 100);
-
     navigate(`/room/${code}`);
-  }
+    setIsCreating(false);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white font-mono">
@@ -77,14 +68,15 @@ export default function Home() {
 
           <div className="space-y-6">
             <button
-              className={`w-full py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg ${isCreating
-                ? 'bg-gray-500 cursor-not-allowed'
-                : 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
-                }`}
+              className={`w-full py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg ${
+                isCreating
+                  ? "bg-gray-500 cursor-not-allowed"
+                  : "bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700"
+              }`}
               onClick={createRoom}
               disabled={isCreating}
             >
-              {isCreating ? 'Creating...' : '🚀 Create Room'}
+              {isCreating ? "Creating..." : "🚀 Create Room"}
             </button>
 
             <div className="relative">
@@ -104,12 +96,13 @@ export default function Home() {
             <button
               className="w-full bg-zinc-700 text-white py-3 rounded-xl font-semibold transition-all duration-200 hover:bg-zinc-600 transform hover:scale-105 shadow-lg"
               onClick={joinRoom}
+              disabled={isCreating}
             >
               ➡️ Join Room
             </button>
           </div>
 
-          <div className="mt-8 text-xs text-gray-500">
+          <div className="mt-8 text-xs text-gray-500 space-y-1">
             <p>• Rooms are limited to 2 users maximum</p>
             <p>• Messages are not persistent</p>
             <p>• Room codes are 6 characters long</p>
