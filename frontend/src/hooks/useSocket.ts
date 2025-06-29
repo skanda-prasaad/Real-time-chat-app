@@ -19,7 +19,7 @@ export default function useSocket(roomId: string) {
       socketRef.current = null;
     }
 
-    const socket = new WebSocket("wss://your-backend-url.onrender.com"); // change this to your deployed backend ws URL
+    const socket = new WebSocket("wss://real-time-chat-app-mev3.onrender.com"); // change this to your deployed backend ws URL
     socketRef.current = socket;
 
     socket.onopen = () => {
